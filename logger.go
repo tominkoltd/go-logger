@@ -2,9 +2,23 @@ package logger
 
 import (
 	"github.com/tominkoltd/go-datetime"
-	//"strings"
+	"strings"
 	"fmt"
 	"time"
+	"strconv"
+)
+
+const (
+	EffectNone				= 0
+	EffectBold       		= 1 << iota
+	EffectDim
+	EffectItalic
+	EffectUnderline
+	EffectBlink
+	EffectReverse
+	EffectStrikethrough
+	EffectOverline
+	EffectDoubleUnderline
 )
 
 type Logger struct {
@@ -17,7 +31,7 @@ type Logger struct {
 
 type logMessage struct {
 	l 			*Logger
-	message		interface{}
+	message		string
 	isError 	bool
 	isWarning	bool
 	level		int
@@ -31,10 +45,6 @@ func init() {
 }
 
 func (l *Logger) Init() {
-	if l.TimeStampFormat == "" {
-		l.TimeStampFormat = "%Y-%d-%m"
-	}
-
 	l.initialised = true
 }
 
@@ -86,9 +96,65 @@ func (l *Logger) doLog(message interface{}, err bool, warn bool, args ...any) {
 
 func loggerWorker() {
 	for log := range logChannel {
-
-		out := dateTime.Format(time.Now(), "Year: %Y, Month: %M  %Y-%m-%d %H:%i:%s %r")
-		fmt.Println(out)
-		fmt.Println(log.message)
+		ts := ""
+		if log.l.TimeStampFormat != "" {
+			ts = dateTime.Format(time.Now(), log.l.TimeStampFormat)
+		}
+		fmt.Println(ts+" "+log.message)
 	}
+}
+
+func GetAnsi(color int, background int, effect int) string {
+	if color == 0 && background == 0 && effect == 0 {
+		return "\x1b[0m"
+	}
+	var code strings.Builder
+	code.WriteString("\033[")
+
+	if effect == 0 {
+		code.WriteString("0;")
+	}
+	if effect&EffectBold != 0 {
+		code.WriteString("1;")
+	}
+	if effect&EffectDim != 0 {
+		code.WriteString("2;")
+	}
+	if effect&EffectItalic != 0 {
+		code.WriteString("3;")
+	}
+	if effect&EffectUnderline != 0 {
+		code.WriteString("4;")
+	}
+	if effect&EffectBlink != 0 {
+		code.WriteString("5;")
+	}
+	if effect&EffectReverse != 0 {
+		code.WriteString("7;")
+	}
+	if effect&EffectStrikethrough != 0 {
+		code.WriteString("9;")
+	}
+	if effect&EffectOverline != 0 {
+		code.WriteString("53;")
+	}
+	if effect&EffectDoubleUnderline != 0 {
+		code.WriteString("21;")
+	}
+	if color > 0 {
+		code.WriteString("38;5;" + strconv.Itoa(color) + ";")
+	} else {
+		code.WriteString("39;")
+	}
+	if background > 0 {
+		code.WriteString("48;5;" + strconv.Itoa(background) + ";")
+	} else {
+		code.WriteString("49;")
+	}
+	if code.Len() == 0 {
+		return ""
+	}
+	b := []byte(code.String())
+	b[len(b)-1] = 'm'
+	return string(b)
 }
