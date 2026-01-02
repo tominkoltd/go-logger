@@ -1,70 +1,137 @@
+/*
+	Destination:
+		stdout
+		stderr
+		file:<file name with path> 			(./debug.log)
+		udp:<ip/address:port>				(udp.logger.com:987)
+		tcp:<ip/address:port>				(tcp.logger.com:987)
+		socket-file:<file name with path>	(./logger.sock)
+		syslog:<socket path>				(/dev/log)
+		syslog-udp:<host:port>				(localhost:514)
+*/
+
 package logger
 
 import (
-	"github.com/tominkoltd/go-datetime"
+	"github.com/tominkoltd/go-logger/core"
+	"github.com/tominkoltd/go-logger/protocols/stdout"
+	"github.com/tominkoltd/go-logger/protocols/stderr"
 	"strings"
-	"fmt"
-	"time"
 	"strconv"
+	"errors"
 )
 
-const (
-	EffectNone				= 0
-	EffectBold       		= 1 << iota
-	EffectDim
-	EffectItalic
-	EffectUnderline
-	EffectBlink
-	EffectReverse
-	EffectStrikethrough
-	EffectOverline
-	EffectDoubleUnderline
-)
+type logger struct {
+	confs	[]*core.Config
+}
 
-type Logger struct {
-	FileName		string
+type Config struct {
+	Destination		string
 	TimeStampFormat	string
+	QueueSize		int
+	ReportInterval	int
 	DropIfBusy		bool
-	DefaultLevel	int
-	initialised		bool
+	Prefix			string
+	StripAnsi		bool
+	AlignLines		bool
+	AlignSeparator	rune
+	AllowedTags		string
+	IgnoreBelow		int
+	IgnoreAbove		int
+	ParseColors		bool
+	ParseColorChar	rune
+	IgnoreLog		bool
+	IgnoreError		bool
+	IgnoreWarn		bool
 }
 
-type logMessage struct {
-	l 			*Logger
-	message		string
-	isError 	bool
-	isWarning	bool
-	level		int
-	prefix		string
+func New(confs ...Config) (*logger, error) {
+	l := &logger{}
+
+	if len(confs)==0 {
+		return nil, errors.New("Config is missing")
+	}
+
+	for _, c := range confs {
+		gc := &core.Config{}
+		gc.Destination 		= c.Destination
+		gc.TimeStampFormat 	= c.TimeStampFormat
+		gc.QueueSize 		= c.QueueSize
+		gc.ReportInterval 	= c.ReportInterval
+		gc.DropIfBusy 		= c.DropIfBusy
+		gc.Prefix 			= c.Prefix
+		gc.StripAnsi 		= c.StripAnsi
+		gc.AlignLines 		= c.AlignLines
+		gc.AlignSeparator 	= c.AlignSeparator
+		gc.IgnoreBelow 		= c.IgnoreBelow
+		gc.IgnoreAbove 		= c.IgnoreAbove
+		gc.ParseColors 		= c.ParseColors
+		gc.IgnoreLog 		= c.IgnoreLog
+		gc.IgnoreError 		= c.IgnoreError
+		gc.IgnoreWarn 		= c.IgnoreWarn
+		gc.AllowedTags 		= make(map[string]bool)
+		
+		if c.ParseColors {
+			if c.ParseColorChar != 0 {
+				gc.ParseColorChar = []byte(string(c.ParseColorChar))
+			} else {
+				gc.ParseColorChar = []byte("ç")
+			}
+		}
+		if c.Destination == "stdout" || c.Destination == "" {
+			modLink, err := stdout.New(gc)
+			if err != nil {
+				return nil, err
+			}
+			gc.DestModule = modLink
+		} else if c.Destination == "stderr" {
+			modLink, err := stderr.New(gc)
+			if err != nil {
+				return nil, err
+			}
+			gc.DestModule = modLink
+		}
+
+		if c.AllowedTags != "" {
+			for _, t := range strings.Split(c.AllowedTags, ",") {
+				t = strings.TrimSpace(t)
+				if t == "" {
+					continue
+				}
+				gc.AllowedTags[t] = true
+			}
+		}
+
+		l.confs = append(l.confs, gc)
+	}
+	
+	return l, nil
 }
 
-var logChannel = make(chan logMessage, 50)
-
-func init() {
-	go loggerWorker()
+func MustNew(confs ...Config) *logger {
+	l, err := New(confs...)
+	if err != nil {
+		panic(err)
+	}
+	return l
 }
 
-func (l *Logger) Init() {
-	l.initialised = true
-}
 
-func (l *Logger) Log(message interface{}, arg ...any) {
+
+func (l *logger) Log(message interface{}, arg ...any) {
 	l.doLog(message, false, false, arg...)
 }
-func (l *Logger) Warn(message interface{}, arg ...any) {
+func (l *logger) Warn(message interface{}, arg ...any) {
 	l.doLog(message, false, true, arg...)
 }
-func (l *Logger) Error(message interface{}, arg ...any) {
+func (l *logger) Error(message interface{}, arg ...any) {
 	l.doLog(message, true, false, arg...)
 }
 
-func (l *Logger) doLog(message interface{}, err bool, warn bool, args ...any) {
-	if !l.initialised {
-		l.Init()
-	}
+func (l *logger) doLog(message interface{}, err bool, warn bool, args ...any) {
 
-	logLevel 	:= l.DefaultLevel
-	logPrefix 	:= ""
+	logLevel 	:= 0
+	logTag 		:= ""
 
 	msg			:= ""
 
@@ -73,7 +140,7 @@ func (l *Logger) doLog(message interface{}, err bool, warn bool, args ...any) {
 		case int:
 			logLevel = v
 		case string:
-			logPrefix = v
+			logTag = v
 		}
 	}
 
@@ -82,79 +149,52 @@ func (l *Logger) doLog(message interface{}, err bool, warn bool, args ...any) {
             msg = v
 		case []byte:
 			msg = string(v)		
-        case int, float64, bool:
-            msg = fmt.Sprintf("%v", v)
+        case int:
+            msg = strconv.Itoa(v)
+		case float64:
+			msg = strconv.FormatFloat(v, 'f', -1, 64)
+		case bool:
+			if v {
+				msg = "true"
+			} else {
+				msg = "false"
+			}
         default:
             msg = ""
 
 	}
 
-
-	logChannel <- logMessage{l: l, message: msg, isError: err, isWarning: warn, level: logLevel, prefix: logPrefix}
-}
-
-
-func loggerWorker() {
-	for log := range logChannel {
-		ts := ""
-		if log.l.TimeStampFormat != "" {
-			ts = dateTime.Format(time.Now(), log.l.TimeStampFormat)
+	for _, gc := range l.confs {
+		if gc.IgnoreLog && !err && !warn {
+			continue
 		}
-		fmt.Println(ts+" "+log.message)
-	}
-}
+		if gc.IgnoreError && err {
+			continue
+		}
+		if gc.IgnoreWarn && warn {
+			continue
+		}
 
-func GetAnsi(color int, background int, effect int) string {
-	if color == 0 && background == 0 && effect == 0 {
-		return "\x1b[0m"
-	}
-	var code strings.Builder
-	code.WriteString("\033[")
+		if gc.IgnoreAbove != 0 && logLevel > gc.IgnoreAbove {
+			continue
+		}
+		if gc.IgnoreBelow != 0 && logLevel < gc.IgnoreBelow {
+			continue
+		}
 
-	if effect == 0 {
-		code.WriteString("0;")
+		if logTag == "" {
+			if len(gc.AllowedTags) != 0 {
+				continue
+			}
+		} else {
+			if _, ok := gc.AllowedTags[logTag]; !ok {
+				continue
+			}
+		}
+
+		msg = core.FormatMessage(msg, gc)
+
+		gc.DestModule.Write(msg)
+
 	}
-	if effect&EffectBold != 0 {
-		code.WriteString("1;")
-	}
-	if effect&EffectDim != 0 {
-		code.WriteString("2;")
-	}
-	if effect&EffectItalic != 0 {
-		code.WriteString("3;")
-	}
-	if effect&EffectUnderline != 0 {
-		code.WriteString("4;")
-	}
-	if effect&EffectBlink != 0 {
-		code.WriteString("5;")
-	}
-	if effect&EffectReverse != 0 {
-		code.WriteString("7;")
-	}
-	if effect&EffectStrikethrough != 0 {
-		code.WriteString("9;")
-	}
-	if effect&EffectOverline != 0 {
-		code.WriteString("53;")
-	}
-	if effect&EffectDoubleUnderline != 0 {
-		code.WriteString("21;")
-	}
-	if color > 0 {
-		code.WriteString("38;5;" + strconv.Itoa(color) + ";")
-	} else {
-		code.WriteString("39;")
-	}
-	if background > 0 {
-		code.WriteString("48;5;" + strconv.Itoa(background) + ";")
-	} else {
-		code.WriteString("49;")
-	}
-	if code.Len() == 0 {
-		return ""
-	}
-	b := []byte(code.String())
-	b[len(b)-1] = 'm'
-	return string(b)
 }

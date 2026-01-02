@@ -1,2 +1,4 @@
 github.com/tominkoltd/go-datetime v1.0.0 h1:ym3ppJgVmajwie4nkAxJZpQeY0imFrFVsoyXeWr0NEE=
 github.com/tominkoltd/go-datetime v1.0.0/go.mod h1:po2fiOazbycwUMMoZlOZ67W9nFWHWARk/c3VbKpdm9A=
+github.com/tominkoltd/go-grapheme v0.0.0-20251218140833-0048cc50ce64 h1:nX0xZ+PkXEDO7czjByv9LFK1cHKVshng+G22dd284aU=
+github.com/tominkoltd/go-grapheme v0.0.0-20251218140833-0048cc50ce64/go.mod h1:sFnxjqlevgCGUpJ2LbE8NBEsZ3SmlExcP74PNVsy7Q0=
