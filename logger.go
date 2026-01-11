@@ -1,4 +1,5 @@
 /*
+	v1.0.1
 	Destination:
 		stdout
 		stderr
