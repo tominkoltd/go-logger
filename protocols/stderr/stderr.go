@@ -32,6 +32,9 @@ func (md *modData) Write(s string) error {
 	return nil
 }
 
+func (md *modData) Close() error {
+	return nil
+}
 
 
 

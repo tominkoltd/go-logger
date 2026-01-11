@@ -16,13 +16,15 @@ import (
 	"github.com/tominkoltd/go-logger/core"
 	"github.com/tominkoltd/go-logger/protocols/stdout"
 	"github.com/tominkoltd/go-logger/protocols/stderr"
+	"github.com/tominkoltd/go-logger/protocols/file"
 	"strings"
 	"strconv"
 	"errors"
 )
 
 type logger struct {
-	confs	[]*core.Config
+	confs		[]*core.Config
+	disabled	bool
 }
 
 type Config struct {
@@ -46,6 +48,7 @@ type Config struct {
 }
 
 func New(confs ...Config) (*logger, error) {
+	var outErr error
 	l := &logger{}
 
 	if len(confs)==0 {
@@ -71,6 +74,9 @@ func New(confs ...Config) (*logger, error) {
 		gc.IgnoreWarn 		= c.IgnoreWarn
 		gc.AllowedTags 		= make(map[string]bool)
 		
+		if c.QueueSize == 0 {
+			c.QueueSize = 100
+		}
 		if c.ParseColors {
 			if c.ParseColorChar != 0 {
 				gc.ParseColorChar = []byte(string(c.ParseColorChar))
@@ -81,13 +87,22 @@ func New(confs ...Config) (*logger, error) {
 		if c.Destination == "stdout" || c.Destination == "" {
 			modLink, err := stdout.New(gc)
 			if err != nil {
-				return nil, err
+				outErr = err
+				gc.Disabled = true
 			}
 			gc.DestModule = modLink
 		} else if c.Destination == "stderr" {
 			modLink, err := stderr.New(gc)
 			if err != nil {
-				return nil, err
+				outErr = err
+				gc.Disabled = true
+			}
+			gc.DestModule = modLink
+		} else if strings.HasPrefix(c.Destination, "file:") {
+			modLink, err := file.New(gc)
+			if err != nil {
+				outErr = err
+				gc.Disabled = true
 			}
 			gc.DestModule = modLink
 		}
@@ -105,18 +120,24 @@ func New(confs ...Config) (*logger, error) {
 		l.confs = append(l.confs, gc)
 	}
 	
-	return l, nil
+	return l, outErr
 }
 
-func MustNew(confs ...Config) *logger {
+func MustNew(confs ...Config) (*logger, error) {
 	l, err := New(confs...)
 	if err != nil {
 		panic(err)
 	}
-	return l
+	return l, nil
 }
 
-
+func (l *logger) Close() {
+	for _, gc := range l.confs {
+		gc.Disabled = true
+		gc.DestModule.Close()
+		gc.DestModule=nil
+	}
+}
 
 func (l *logger) Log(message interface{}, arg ...any) {
 	l.doLog(message, false, false, arg...)
@@ -129,7 +150,9 @@ func (l *logger) Error(message interface{}, arg ...any) {
 }
 
 func (l *logger) doLog(message interface{}, err bool, warn bool, args ...any) {
-
+	if l.disabled {
+		return
+	}
 	logLevel 	:= 0
 	logTag 		:= ""
 
@@ -165,6 +188,9 @@ func (l *logger) doLog(message interface{}, err bool, warn bool, args ...any) {
 	}
 
 	for _, gc := range l.confs {
+		if gc.Disabled {
+			continue
+		}
 		if gc.IgnoreLog && !err && !warn {
 			continue
 		}

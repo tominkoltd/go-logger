@@ -1,3 +1,5 @@
+github.com/tominkoltd/go-ansi v1.0.1 h1:7g8HhU34wJ5RS5NC59p7L1E0ld7PQP7U1CMKr55O2TM=
+github.com/tominkoltd/go-ansi v1.0.1/go.mod h1:C1jSGiMGscvyh5+BiR7FJQjR/Yahm1BRIzl98UuF8xs=
 github.com/tominkoltd/go-datetime v1.0.0 h1:ym3ppJgVmajwie4nkAxJZpQeY0imFrFVsoyXeWr0NEE=
 github.com/tominkoltd/go-datetime v1.0.0/go.mod h1:po2fiOazbycwUMMoZlOZ67W9nFWHWARk/c3VbKpdm9A=
 github.com/tominkoltd/go-grapheme v0.0.0-20251218140833-0048cc50ce64 h1:nX0xZ+PkXEDO7czjByv9LFK1cHKVshng+G22dd284aU=
