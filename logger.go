@@ -23,7 +23,7 @@ import (
 	"errors"
 )
 
-type logger struct {
+type Logger struct {
 	confs		[]*core.Config
 	disabled	bool
 }
@@ -48,9 +48,9 @@ type Config struct {
 	IgnoreWarn		bool
 }
 
-func New(confs ...Config) (*logger, error) {
+func New(confs ...Config) (*Logger, error) {
 	var outErr error
-	l := &logger{}
+	l := &Logger{}
 
 	if len(confs)==0 {
 		return nil, errors.New("Config is missing")
@@ -124,7 +124,7 @@ func New(confs ...Config) (*logger, error) {
 	return l, outErr
 }
 
-func MustNew(confs ...Config) (*logger, error) {
+func MustNew(confs ...Config) (*Logger, error) {
 	l, err := New(confs...)
 	if err != nil {
 		panic(err)
@@ -132,7 +132,7 @@ func MustNew(confs ...Config) (*logger, error) {
 	return l, nil
 }
 
-func (l *logger) Close() {
+func (l *Logger) Close() {
 	for _, gc := range l.confs {
 		gc.Disabled = true
 		gc.DestModule.Close()
@@ -140,17 +140,17 @@ func (l *logger) Close() {
 	}
 }
 
-func (l *logger) Log(message interface{}, arg ...any) {
+func (l *Logger) Log(message interface{}, arg ...any) {
 	l.doLog(message, false, false, arg...)
 }
-func (l *logger) Warn(message interface{}, arg ...any) {
+func (l *Logger) Warn(message interface{}, arg ...any) {
 	l.doLog(message, false, true, arg...)
 }
-func (l *logger) Error(message interface{}, arg ...any) {
+func (l *Logger) Error(message interface{}, arg ...any) {
 	l.doLog(message, true, false, arg...)
 }
 
-func (l *logger) doLog(message interface{}, err bool, warn bool, args ...any) {
+func (l *Logger) doLog(message interface{}, err bool, warn bool, args ...any) {
 	if l.disabled {
 		return
 	}
