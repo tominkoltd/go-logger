@@ -32,7 +32,7 @@ func New(c *core.Config) (*modData, error) {
 }
 
 // Write enqueues a message for the worker goroutine to print to stderr.
-func (md *modData) Write(s string) error {
+func (md *modData) Write(s string, _, _ bool) error {
 	logChannel <- logMessage{message: s}
 	return nil
 }

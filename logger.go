@@ -13,6 +13,12 @@ to all of them in order.
 	stdout                          – standard output (default when Destination is "")
 	stderr                          – standard error
 	file:<path>                     – append to a file  (e.g. "file:./app.log")
+	syslog:                         – local syslog (/dev/log or /var/run/syslog)
+	syslog://host:port              – remote syslog over UDP
+	syslog+tcp://host:port          – remote syslog over TCP
+	udp://host:port                 – raw UDP datagram per log line
+	http://endpoint                 – HTTP POST per log line (async, non-blocking)
+	https://endpoint                – same over TLS
 
 # Basic usage
 
@@ -63,8 +69,11 @@ import (
 
 	"github.com/tominkoltd/go-logger/core"
 	"github.com/tominkoltd/go-logger/protocols/file"
+	"github.com/tominkoltd/go-logger/protocols/httplog"
 	"github.com/tominkoltd/go-logger/protocols/stderr"
 	"github.com/tominkoltd/go-logger/protocols/stdout"
+	"github.com/tominkoltd/go-logger/protocols/syslog"
+	"github.com/tominkoltd/go-logger/protocols/udplog"
 )
 
 // Logger holds one or more active output configurations.
@@ -134,6 +143,10 @@ type Config struct {
 
 	// IgnoreWarn suppresses Warn() messages on this destination.
 	IgnoreWarn bool
+
+	// SyslogTag is the program tag used by syslog destinations.
+	// Defaults to "apm" when empty. Ignored by non-syslog destinations.
+	SyslogTag string
 }
 
 // New creates a Logger from one or more Config values.
@@ -170,6 +183,7 @@ func New(confs ...Config) (*Logger, error) {
 			IgnoreLog:       c.IgnoreLog,
 			IgnoreError:     c.IgnoreError,
 			IgnoreWarn:      c.IgnoreWarn,
+			SyslogTag:       c.SyslogTag,
 			AllowedTags:     make(map[string]bool),
 		}
 
@@ -202,6 +216,33 @@ func New(confs ...Config) (*Logger, error) {
 
 		case strings.HasPrefix(c.Destination, "file:"):
 			modLink, err := file.New(gc)
+			if err != nil {
+				outErr = err
+				gc.Disabled = true
+			}
+			gc.DestModule = modLink
+
+		case c.Destination == "syslog:" ||
+			strings.HasPrefix(c.Destination, "syslog://") ||
+			strings.HasPrefix(c.Destination, "syslog+tcp://"):
+			modLink, err := syslog.New(gc)
+			if err != nil {
+				outErr = err
+				gc.Disabled = true
+			}
+			gc.DestModule = modLink
+
+		case strings.HasPrefix(c.Destination, "udp://"):
+			modLink, err := udplog.New(gc)
+			if err != nil {
+				outErr = err
+				gc.Disabled = true
+			}
+			gc.DestModule = modLink
+
+		case strings.HasPrefix(c.Destination, "http://") ||
+			strings.HasPrefix(c.Destination, "https://"):
+			modLink, err := httplog.New(gc)
 			if err != nil {
 				outErr = err
 				gc.Disabled = true
@@ -336,6 +377,6 @@ func (l *Logger) doLog(message interface{}, isErr bool, isWarn bool, args ...any
 			}
 		}
 
-		gc.DestModule.Write(core.FormatMessage(msg, gc))
+		gc.DestModule.Write(core.FormatMessage(msg, gc), isErr, isWarn)
 	}
 }

@@ -13,7 +13,10 @@ import (
 // Destination is the interface that every output protocol must implement.
 type Destination interface {
 	// Write delivers a single formatted log line to the destination.
-	Write(string) error
+	// isErr and isWarn carry the original message severity so that
+	// destinations that have native severity levels (e.g. syslog) can
+	// route accordingly. File/stdout/stderr destinations ignore them.
+	Write(s string, isErr, isWarn bool) error
 	// Close flushes pending writes and releases any held resources.
 	Close() error
 }
@@ -40,6 +43,7 @@ type Config struct {
 	IgnoreLog       bool
 	IgnoreError     bool
 	IgnoreWarn      bool
+	SyslogTag       string // program tag for syslog destinations (default "apm")
 	Disabled        bool
 }
 

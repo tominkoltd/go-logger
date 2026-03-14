@@ -83,7 +83,7 @@ func New(c *core.Config) (*modData, error) {
 // Write enqueues a message for the worker goroutine to write to the file.
 // If DropIfBusy is set and the queue is full, the message is silently
 // discarded and the internal drop counter is incremented.
-func (md *modData) Write(s string) error {
+func (md *modData) Write(s string, _, _ bool) error {
 	if md.disabled {
 		return errors.New("destination disabled")
 	}
